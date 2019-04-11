@@ -13,7 +13,23 @@ struct TriviaStruct {
 	size_t size;
 };
 
-static size_t WriteTriviaCallback(void *contents, size_t size, size_t nmemb, void *userp)
+void print_to_row(int y, int max_col, char* str_to_print, WINDOW* win)
+{
+	int i = 0;
+	int x = 0;
+	move(y, 3);
+	while (str_to_print[i] != '\0')
+	{
+		getyx(win, y, x); // get the current curser position
+		if (x == (max_col - 3)) { // if we are at the end of the right side of the screen
+			move(y + 1, 3); // start at the beginning of the next row
+		}
+		printw("%c", str_to_print[i]);
+		i++;
+	}
+}
+
+static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp)
 {
 	size_t realsize = size * nmemb;
 	struct TriviaStruct *trivia = (struct TriviaStruct *)userp;
@@ -45,11 +61,10 @@ int main(int argc, char *argv[])
 	init_pair(2, COLOR_GREEN, COLOR_BLACK);
 	init_pair(3, COLOR_BLUE, COLOR_BLACK);
 
-	border('a','b','c','d','*','*','*','*');
-	move(2, 2);
+	border('|','|','_','_','*','*','*','*');
+	move(2, 50);
 	attrset(COLOR_PAIR(1) | A_BOLD);
-	addstr("Welcome to the Quiz Show!\n");
-	move(4, 4);
+	addstr("Welcome to the Quiz Show!");
 
 	CURL *curl_handle;
 	CURLcode res;
@@ -60,47 +75,45 @@ int main(int argc, char *argv[])
 
 	char url[] = "https://opentdb.com/api.php?amount=1&category=9&difficulty=easy&type=multiple";
 	char guess;
+	int max_row, max_col, y, x;
+	int i = 0;
+
+	getmaxyx(stdscr, max_row, max_col); // find the boundaries of the screen
 
 	curl_handle = curl_easy_init(); // initialize the curl session
 
 	if (curl_handle) {
 		curl_easy_setopt(curl_handle, CURLOPT_URL, url); // specify URL to get
-		curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteTriviaCallback); // send data here
+		curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_trivia_callback); // send data here
 		curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&trivia); // pass trivia struct
 		res = curl_easy_perform(curl_handle); // get the data
 		if (res != CURLE_OK) { // check for errors
+			move(4, 3);
 			wprintw(stdscr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		} else {
 			attrset(COLOR_PAIR(2) | A_BOLD);
-			printw("TRIVIA BEFORE DECODE: %s\n\n", trivia.info);
+
+			getyx(stdscr, y, x); // get the current curser position
+			print_to_row(y + 2, max_col, trivia.info, stdscr);
 			decode_html_entities_utf8(trivia.info, NULL);
 		}
 		curl_easy_cleanup(curl_handle); // cleanup curl stuff
 
 		attrset(COLOR_PAIR(3) | A_BOLD);
 
-		/* 
-			- First two parameters specify the position at which to start 
-			- Third parameter number of characters to update. -1 means till end of line
-			- Forth parameter is the normal attribute you wanted to give to the charcter
-			- Fifth is the color index. It is the index given during init_pair()
-			- Use 0 if you didn't want color
-			- Sixth one is always NULL 
-		*/
-		mvchgat(10, 3, -1, A_BOLD, 1, NULL);
-
 		char category_str[] = "\"category\":\"";
 		int category_str_len = strlen(category_str);
 		char type_str[] = "\",\"type\"";
 		char* category_start = strstr(trivia.info, category_str);
-
 		category_start += category_str_len;
 		char* type_start = strstr(category_start, type_str);
 		int category_length = type_start - category_start;
 		char category[category_length];
 		strncpy(category, category_start, category_length);
 		category[category_length] = '\0';
-		printw("CATEGORY: %s\n\n", category);
+
+		getyx(stdscr, y, x); // get the current curser position
+		print_to_row(y + 2, max_col, category, stdscr);
 
 		char question_str[] = "\"question\":\"";
 		int question_str_len = strlen(question_str);
@@ -112,7 +125,9 @@ int main(int argc, char *argv[])
 		char question[question_length];
 		strncpy(question, question_start, question_length);
 		question[question_length] = '\0';
-		printw("QUESTION: %s\n\n", question);
+
+		getyx(stdscr, y, x); // get the current curser position
+		print_to_row(y + 2, max_col, question, stdscr);
 
 		int correct_answer_str_len = strlen(correct_answer_str);
 		char incorrect_answers_str[] = "\",\"incorrect_answers\":[\"";
@@ -120,9 +135,11 @@ int main(int argc, char *argv[])
 		char* incorrect_answers_start = strstr(correct_answer_start, incorrect_answers_str);
 		int correct_answer_length = incorrect_answers_start - correct_answer_start;
 		char correct_answer[correct_answer_length];
-		strncpy(correct_answer, correct_answer_start, correct_answer_length);
-		correct_answer[correct_answer_length] = '\0';
-		printw("CORRECT ANSWER: %s\n\n", correct_answer);
+		char incorrect_answer[correct_answer_length + 4];
+		snprintf(correct_answer, correct_answer_length + 4, "a) %s", correct_answer_start);
+
+		getyx(stdscr, y, x); // get the current curser position
+		print_to_row(y + 2, max_col, correct_answer, stdscr);
 
 		int incorrect_answers_str_len = strlen(incorrect_answers_str);
 		char end_str[] = "]";
@@ -136,40 +153,47 @@ int main(int argc, char *argv[])
 		char answer_separator[] = "\",\"";
 		char* answer_separator_start = strstr(incorrect_answers, answer_separator);
 		int incorrect_answer1_len = answer_separator_start - incorrect_answers;
-		char incorrect_answer1[incorrect_answer1_len];
-		strncpy(incorrect_answer1, incorrect_answers, incorrect_answer1_len);
-		incorrect_answer1[incorrect_answer1_len] = '\0';
+		char incorrect_answer1[incorrect_answer1_len + 4];
+		snprintf(incorrect_answer1, incorrect_answer1_len + 4, "b) %s", incorrect_answers);
 
 		int answer_separator_len = strlen(answer_separator);
 		char* incorrect_answer2_start = answer_separator_start + answer_separator_len;
 		char* answer_separator2_start = strstr(incorrect_answer2_start, answer_separator);
 		int incorrect_answer2_len = answer_separator2_start - incorrect_answer2_start;
-		char incorrect_answer2[incorrect_answer2_len];
-		strncpy(incorrect_answer2, incorrect_answer2_start, incorrect_answer2_len);
-		incorrect_answer2[incorrect_answer2_len] = '\0';
+		char incorrect_answer2[incorrect_answer2_len + 4];
+		snprintf(incorrect_answer2, incorrect_answer2_len + 4, "c) %s", incorrect_answer2_start);
 
 		char* incorrect_answer3_start = answer_separator2_start + answer_separator_len;
 		int incorrect_answer3_len = strlen(incorrect_answer3_start);
-		char incorrect_answer3[incorrect_answer3_len];
-		strncpy(incorrect_answer3, incorrect_answer3_start, incorrect_answer3_len);
-		incorrect_answer3[incorrect_answer3_len - 1] = '\0';
+		char incorrect_answer3[incorrect_answer3_len + 3];
+		snprintf(incorrect_answer3, incorrect_answer3_len + 3, "d) %s", incorrect_answer3_start);
 
-		printw("INCORRECT ANSWER #1: %s\n\n", incorrect_answer1);
-		printw("INCORRECT ANSWER #2: %s\n\n", incorrect_answer2);
-		printw("INCORRECT ANSWER #3: %s\n\n", incorrect_answer3);
+		getyx(stdscr, y, x); // get the current curser position
+		print_to_row(y + 2, max_col, incorrect_answer1, stdscr);
+		getyx(stdscr, y, x); // get the current curser position
+		print_to_row(y + 2, max_col, incorrect_answer2, stdscr);
+		getyx(stdscr, y, x); // get the current curser position
+		print_to_row(y + 2, max_col, incorrect_answer3, stdscr);
 
 		free(trivia.info); // deallocate memory
 		curl_global_cleanup(); // after being done with libcurl, clean it up
 	}
 
 	attrset(COLOR_PAIR(1) | A_BOLD);
-	addstr("WHAT IS YOUR GUESS?\n");
+	getyx(stdscr, y, x); // get the current curser position
+	print_to_row(y + 2, max_col, "WHAT IS YOUR GUESS?", stdscr);
 	refresh();
 	guess = getch();
 	attrset(COLOR_PAIR(2) | A_BOLD);
-	printw("YOU GUESSED: %c\n\n", guess);
+
+	char guess_str[15];
+	sprintf(guess_str, "YOU GUESSED: %c", guess);
+	getyx(stdscr, y, x); // get the current curser position
+	print_to_row(y + 2, max_col, guess_str, stdscr);
+
 	attrset(COLOR_PAIR(3) | A_BOLD);
-	addstr("PRESS ANY KEY TO EXIT");
+	getyx(stdscr, y, x); // get the current curser position
+	print_to_row(y + 2, max_col, "PRESS ANY KEY TO EXIT", stdscr);
 	getch();
 	endwin(); // End curses mode
 	return(0);
