@@ -220,7 +220,7 @@ static const char *const NAMED_ENTITIES[][2] = {
 	{ "rho;", "Ï" },
 	{ "rlm;", "\xE2\x80\x8F" },
 	{ "rsaquo;", "â€º" },
-	{ "rsquo;", "â€™" },
+	{ "rsquo;", "’" },
 	{ "sbquo;", "â€š" },
 	{ "scaron;", "Å¡" },
 	{ "sdot;", "â‹…" },
