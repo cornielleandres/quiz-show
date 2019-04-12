@@ -3,13 +3,14 @@
 #include <string.h>
 #include <locale.h>
 #include <ctype.h>
+#include <time.h>
 
 #include <ncursesw/curses.h>
 #include <curl/curl.h>
 #include "entities.h"
 
 
-struct TriviaStruct {
+struct TriviaItem {
 	char* raw_info;
 	size_t size;
 	char* category;
@@ -20,9 +21,15 @@ struct TriviaStruct {
 	char* incorrect_answer3;
 };
 
+struct CurrentRound {
+	char* choices[4];
+};
+
+void swap (char** a, char** b);
+void randomize(char* arr[], int arr_size);
 void print_center_text(int row, char *text);
-void print_to_row(int y, int max_col, char* str_to_print);
-void set_trivia_info(struct TriviaStruct* trivia);
+void print_to_position(int y, int x, int max_col, char* str_to_print);
+void set_trivia_info(struct TriviaItem* trivia, struct CurrentRound* round);
 static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp);
 void init_curses();
 
@@ -30,9 +37,10 @@ int main(int argc, char *argv[])
 {
 	CURL *curl_handle;
 	CURLcode res;
-	struct TriviaStruct trivia;
+	struct TriviaItem trivia;
+	struct CurrentRound round;
 	char guess;
-	int max_row, max_col, y, x;
+	int max_row, max_col, y, x, score;
 
 	init_curses();
 	border(
@@ -48,6 +56,12 @@ int main(int argc, char *argv[])
 	getmaxyx(stdscr, max_row, max_col); // find the boundaries of the screen
 	attrset(COLOR_PAIR(1) | A_BOLD);
 	print_center_text(2, "Welcome to the Quiz Show!");
+
+	getyx(stdscr, y, x); // get the current curser position
+	attrset(COLOR_PAIR(2) | A_BOLD);
+	print_to_position(y + 2, 3, max_col, "FETCHING API DATA...");
+	refresh();
+	move(y, x);
 
 	trivia.raw_info = malloc(1); // will be grown as needed by realloc
 	trivia.size = 0; // no data at this point
@@ -67,12 +81,14 @@ int main(int argc, char *argv[])
 		}
 		getyx(stdscr, y, x); // get the current curser position
 		attrset(COLOR_PAIR(2) | A_BOLD);
-		print_to_row(y + 2, max_col, trivia.raw_info);
+		print_to_position(y + 2, 3, max_col, trivia.raw_info);
 		decode_html_entities_utf8(trivia.raw_info, NULL);
 		curl_easy_cleanup(curl_handle); // cleanup curl stuff
 	}
 
-	set_trivia_info(&trivia);
+	set_trivia_info(&trivia, &round);
+
+	randomize(round.choices, 4);
 
 	getyx(stdscr, y, x); // get the current curser position
 	attrset(COLOR_PAIR(3) | A_BOLD);
@@ -80,25 +96,29 @@ int main(int argc, char *argv[])
 
 	getyx(stdscr, y, x); // get the current curser position
 	attrset(COLOR_PAIR(1) | A_BOLD);
-	print_to_row(y + 2, max_col, trivia.question);
+	print_to_position(y + 2, 3, max_col, trivia.question);
 
 	attrset(COLOR_PAIR(2) | A_BOLD);
 
 	getyx(stdscr, y, x); // get the current curser position
-	print_to_row(y + 2, max_col, trivia.correct_answer);
+	print_to_position(y + 2, 3, max_col, "a) ");
+	print_to_position(y + 2, 6, max_col, round.choices[0]);
 
 	getyx(stdscr, y, x); // get the current curser position
-	print_to_row(y + 2, max_col, trivia.incorrect_answer1);
+	print_to_position(y + 2, 3, max_col, "b) ");
+	print_to_position(y + 2, 6, max_col, round.choices[1]);
 
 	getyx(stdscr, y, x); // get the current curser position
-	print_to_row(y + 2, max_col, trivia.incorrect_answer2);
+	print_to_position(y + 2, 3, max_col, "c) ");
+	print_to_position(y + 2, 6, max_col, round.choices[2]);
 
 	getyx(stdscr, y, x); // get the current curser position
-	print_to_row(y + 2, max_col, trivia.incorrect_answer3);
+	print_to_position(y + 2, 3, max_col, "d) ");
+	print_to_position(y + 2, 6, max_col, round.choices[3]);
 
 	attrset(COLOR_PAIR(1) | A_BOLD);
 	getyx(stdscr, y, x); // get the current curser position
-	print_to_row(y + 2, max_col, "WHAT IS YOUR GUESS?");
+	print_to_position(y + 2, 3, max_col, "WHAT IS YOUR GUESS?");
 	refresh();
 
 	int color_num = 1;
@@ -120,7 +140,7 @@ int main(int argc, char *argv[])
 			if (guess == valid_guesses[j]) { // if user made a valid guess
 				char guess_str[15];
 				sprintf(guess_str, "YOU GUESSED: %c", guess);
-				print_to_row(y + 2, max_col, guess_str);
+				print_to_position(y + 2, 3, max_col, guess_str);
 				refresh();
 				break;
 			}
@@ -128,7 +148,7 @@ int main(int argc, char *argv[])
 		}
 		if (j == valid_guesses_len) // if user made no valid guess
 		{
-			print_to_row(y + 2, max_col, "INVALID GUESS");
+			print_to_position(y + 2, 3, max_col, "INVALID GUESS");
 			refresh();
 			guess = getch();
 			guess = tolower(guess);
@@ -137,7 +157,7 @@ int main(int argc, char *argv[])
 
 	attrset(COLOR_PAIR(3) | A_BOLD);
 	getyx(stdscr, y, x); // get the current curser position
-	print_to_row(y + 2, max_col, "PRESS ANY KEY TO EXIT");
+	print_to_position(y + 2, 3, max_col, "PRESS ANY KEY TO EXIT");
 
 	getch();
 	free(trivia.raw_info);
@@ -150,7 +170,7 @@ int main(int argc, char *argv[])
 	if (curl_handle) curl_global_cleanup(); // after being done with libcurl, clean it up
 	endwin(); // End curses mode
 	return(0);
-}
+};
 
 void init_curses()
 {
@@ -166,12 +186,12 @@ void init_curses()
 	init_pair(1, COLOR_CYAN, COLOR_BLACK);
 	init_pair(2, COLOR_GREEN, COLOR_BLACK);
 	init_pair(3, COLOR_BLUE, COLOR_BLACK);
-}
+};
 
 static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp)
 {
 	size_t realsize = size * nmemb;
-	struct TriviaStruct *trivia = (struct TriviaStruct *)userp;
+	struct TriviaItem *trivia = (struct TriviaItem *)userp;
 
 	char *ptr = realloc(trivia->raw_info, trivia->size + realsize + 1);
 
@@ -187,9 +207,9 @@ static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, v
 	trivia->raw_info[trivia->size] = 0;
 
 	return realsize;
-}
+};
 
-void set_trivia_info(struct TriviaStruct* trivia)
+void set_trivia_info(struct TriviaItem* trivia, struct CurrentRound* round)
 {
 	char category_str[] = "\"category\":\"";
 	int category_str_len = strlen(category_str);
@@ -226,14 +246,13 @@ void set_trivia_info(struct TriviaStruct* trivia)
 	char* incorrect_answers_start = strstr(correct_answer_start, incorrect_answers_str);
 	int correct_answer_len = incorrect_answers_start - correct_answer_start;
 
-	trivia->correct_answer = (char*) malloc((correct_answer_len + 4) * sizeof(char));
-	trivia->correct_answer[correct_answer_len + 3] = '\0';
-	trivia->correct_answer[0] = 'a';
-	trivia->correct_answer[1] = ')';
-	trivia->correct_answer[2] = ' ';
+	trivia->correct_answer = (char*) malloc((correct_answer_len + 1) * sizeof(char));
+	trivia->correct_answer[correct_answer_len] = '\0';
 
-	i = 3;
-	while (i < correct_answer_len + 3) trivia->correct_answer[i++] = correct_answer_start[i - 3];
+	i = 0;
+	while (i < correct_answer_len) trivia->correct_answer[i++] = correct_answer_start[i];
+
+	round->choices[0] = trivia->correct_answer;
 
 	int incorrect_answers_str_len = strlen(incorrect_answers_str);
 	char end_str[] = "\"]";
@@ -256,39 +275,35 @@ void set_trivia_info(struct TriviaStruct* trivia)
 	char* inc_answer3_start = answer_separator2_start + answer_separator_len;
 	int incorrect_answer3_len = strlen(inc_answer3_start);
 
-	trivia->incorrect_answer1 = (char*) malloc((incorrect_answer1_len + 4) * sizeof(char));
-	trivia->incorrect_answer1[incorrect_answer1_len + 3] = '\0';
-	trivia->incorrect_answer1[0] = 'b';
-	trivia->incorrect_answer1[1] = ')';
-	trivia->incorrect_answer1[2] = ' ';
+	trivia->incorrect_answer1 = (char*) malloc((incorrect_answer1_len + 1) * sizeof(char));
+	trivia->incorrect_answer1[incorrect_answer1_len] = '\0';
 
-	i = 3;
-	while (i < incorrect_answer1_len + 3) trivia->incorrect_answer1[i++] = incorrect_answers[i - 3];
+	i = 0;
+	while (i < incorrect_answer1_len) trivia->incorrect_answer1[i++] = incorrect_answers_start[i];
 
-	trivia->incorrect_answer2 = (char*) malloc((incorrect_answer2_len + 4) * sizeof(char));
-	trivia->incorrect_answer2[incorrect_answer2_len + 3] = '\0';
-	trivia->incorrect_answer2[0] = 'c';
-	trivia->incorrect_answer2[1] = ')';
-	trivia->incorrect_answer2[2] = ' ';
+	round->choices[1] = trivia->incorrect_answer1;
 
-	i = 3;
-	while (i < incorrect_answer2_len + 3) trivia->incorrect_answer2[i++] = inc_answer2_start[i - 3];
+	trivia->incorrect_answer2 = (char*) malloc((incorrect_answer2_len + 1) * sizeof(char));
+	trivia->incorrect_answer2[incorrect_answer2_len] = '\0';
 
-	trivia->incorrect_answer3 = (char*) malloc((incorrect_answer3_len + 4) * sizeof(char));
-	trivia->incorrect_answer3[incorrect_answer3_len + 3] = '\0';
-	trivia->incorrect_answer3[0] = 'd';
-	trivia->incorrect_answer3[1] = ')';
-	trivia->incorrect_answer3[2] = ' ';
+	i = 0;
+	while (i < incorrect_answer2_len) trivia->incorrect_answer2[i++] = inc_answer2_start[i];
 
-	i = 3;
-	while (i < incorrect_answer3_len + 3) trivia->incorrect_answer3[i++] = inc_answer3_start[i - 3];
-}
+	round->choices[2] = trivia->incorrect_answer2;
 
-void print_to_row(int y, int max_col, char* str_to_print)
+	trivia->incorrect_answer3 = (char*) malloc((incorrect_answer3_len + 1) * sizeof(char));
+	trivia->incorrect_answer3[incorrect_answer3_len] = '\0';
+
+	i = 0;
+	while (i < incorrect_answer3_len) trivia->incorrect_answer3[i++] = inc_answer3_start[i];
+
+	round->choices[3] = trivia->incorrect_answer3;
+};
+
+void print_to_position(int y, int x, int max_col, char* str_to_print)
 {
 	int i = 0;
-	int x = 0;
-	move(y, 3);
+	move(y, x);
 	while (str_to_print[i] != '\0')
 	{
 		getyx(stdscr, y, x); // get the current curser position
@@ -298,7 +313,7 @@ void print_to_row(int y, int max_col, char* str_to_print)
 		printw("%c", str_to_print[i]);
 		i++;
 	}
-}
+};
 
 void print_center_text(int row, char *text)
 {
@@ -307,4 +322,24 @@ void print_center_text(int row, char *text)
 	len = strlen(text); // get text length
 	indent = (width - len)/2; // calculate indent
 	mvaddstr(row, indent, text); // print the string
-}
+};
+
+void swap (char** a, char** b) // swap two char pointers
+{ 
+	char* temp = *a;
+	*a = *b;
+	*b = temp;
+};
+
+void randomize(char* arr[], int arr_size) // generate a random permutation of arr[]
+{
+	srand(time(NULL)); // use a diff seed value to not get same result each time this is run
+
+	// start from the last element and swap one by one
+	// we don't need to run for the first element, that's why i > 0
+	for (int i = arr_size - 1; i > 0; i--)
+	{
+		int j = rand() % (i + 1); // pick a random index from 0 to i
+		swap(&arr[i], &arr[j]); // Swap arr[i] with the element at the randomly picked index
+	}
+};
