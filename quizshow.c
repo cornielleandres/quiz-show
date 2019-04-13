@@ -26,8 +26,7 @@ struct CurrentRound {
 
 void swap (char** a, char** b);
 void randomize(char* arr[], int arr_size);
-void print_center_text(int row, char *text);
-void print_to_position(int y, int x, int max_col, char* str_to_print);
+void print_center_text(WINDOW* window, int row, char *text);
 void set_trivia_info(struct TriviaItem* trivia, struct CurrentRound* round);
 static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp);
 void init_curses();
@@ -39,7 +38,8 @@ int main(int argc, char *argv[])
 	struct TriviaItem trivia;
 	struct CurrentRound round;
 	char guess;
-	int max_row, max_col, y, x, score;
+	char valid_guesses[] = "abcd";
+	int max_row, max_col, y, x, i, choice;
 
 	init_curses(); // initialize curses
 	getmaxyx(stdscr, max_row, max_col); // find the boundaries of the screen
@@ -53,92 +53,80 @@ int main(int argc, char *argv[])
 		curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&trivia); // pass trivia struct
 		curl_easy_setopt(curl_handle, CURLOPT_URL, url); // specify URL to get
 
+		WINDOW* main_window = subwin(stdscr, max_row - 4, max_col - 4, 3, 2);
+		border(
+			ACS_VLINE, // left side
+			ACS_VLINE, // right side
+			ACS_HLINE, // top
+			ACS_HLINE, // bottom
+			ACS_ULCORNER, // upper-left corner
+			ACS_URCORNER, // upper-right corner
+			ACS_LLCORNER, // lower-left corner
+			ACS_LRCORNER // lower-right corner
+		);
+		attrset(COLOR_PAIR(1) | A_BOLD);
+		print_center_text(stdscr, 2, "Welcome to the Quiz Show!");
+		refresh(); // refresh stdscr to show border and title
+
 		while (TRUE)
 		{
 			trivia.raw_info = malloc(1); // will be grown as needed by realloc
 			trivia.size = 0; // no data at this point
+			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
+			print_center_text(main_window, 2, "Fetching trivia question...");
+			wrefresh(main_window);
 			res = curl_easy_perform(curl_handle); // get the data
 			if (res != CURLE_OK) { // check for errors
-				move(4, 3); // move cursor
 				endwin(); // End curses mode
 				fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 				return(1);
 			}
-			attrset(COLOR_PAIR(1) | A_BOLD);
-			print_center_text(2, "Welcome to the Quiz Show!");
-			getyx(stdscr, y, x); // get the current curser position
-			attrset(COLOR_PAIR(2) | A_BOLD);
-			print_center_text(4, "Fetching API data...");
-			refresh();
-			move(4, 0);
-			clrtoeol();
-			attrset(COLOR_PAIR(0));
-			border(
-				ACS_VLINE, // left side
-				ACS_VLINE, // right side
-				ACS_HLINE, // top
-				ACS_HLINE, // bottom
-				ACS_ULCORNER, // upper-left corner
-				ACS_URCORNER, // upper-right corner
-				ACS_LLCORNER, // lower-left corner
-				ACS_LRCORNER // lower-right corner
-			);
-			getyx(stdscr, y, x); // get the current curser position
-			attrset(COLOR_PAIR(2) | A_BOLD);
-			print_to_position(y, 3, max_col, trivia.raw_info);
+			wmove(main_window, 2, 0);
+			wclrtoeol(main_window);
+			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
+			waddstr(main_window, trivia.raw_info);
 			decode_html_entities_utf8(trivia.raw_info, NULL);
 			set_trivia_info(&trivia, &round);
 			randomize(round.choices, 4);
 
-			getyx(stdscr, y, x); // get the current curser position
-			attrset(COLOR_PAIR(3) | A_BOLD);
-			print_center_text(y + 2, trivia.category);
+			getyx(main_window, y, x);
+			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+			print_center_text(main_window, y + 2, trivia.category);
 
-			getyx(stdscr, y, x); // get the current curser position
-			attrset(COLOR_PAIR(1) | A_BOLD);
-			print_to_position(y + 2, 3, max_col, trivia.question);
+			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
+			mvwaddstr(main_window, y + 4, 0, trivia.question);
 
-			attrset(COLOR_PAIR(2) | A_BOLD);
+			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 
-			getyx(stdscr, y, x); // get the current curser position
-			print_to_position(y + 2, 3, max_col, "a) ");
-			print_to_position(y + 2, 6, max_col, round.choices[0]);
+			getyx(main_window, y, x);
+			mvwaddstr(main_window, y + 2, 2, "a) ");
+			mvwaddstr(main_window, y + 2, 5, round.choices[0]);
 
-			getyx(stdscr, y, x); // get the current curser position
-			print_to_position(y + 2, 3, max_col, "b) ");
-			print_to_position(y + 2, 6, max_col, round.choices[1]);
+			mvwaddstr(main_window, y + 4, 2, "b) ");
+			mvwaddstr(main_window, y + 4, 5, round.choices[1]);
 
-			getyx(stdscr, y, x); // get the current curser position
-			print_to_position(y + 2, 3, max_col, "c) ");
-			print_to_position(y + 2, 6, max_col, round.choices[2]);
+			mvwaddstr(main_window, y + 6, 2, "c) ");
+			mvwaddstr(main_window, y + 6, 5, round.choices[2]);
 
-			getyx(stdscr, y, x); // get the current curser position
-			print_to_position(y + 2, 3, max_col, "d) ");
-			print_to_position(y + 2, 6, max_col, round.choices[3]);
+			mvwaddstr(main_window, y + 8, 2, "d) ");
+			mvwaddstr(main_window, y + 8, 5, round.choices[3]);
 
-			attrset(COLOR_PAIR(1) | A_BOLD);
-			getyx(stdscr, y, x); // get the current curser position
-			print_to_position(y + 2, 3, max_col, "WHAT IS YOUR GUESS?");
-			refresh();
-
-			int color_num = 1;
-			getyx(stdscr, y, x); // get the current curser position
-			guess = getch(); // get a single character from user
-			guess = tolower(guess);
-			char valid_guesses[] = "abcd";
-			int valid_guesses_len = strlen(valid_guesses);
-			int j = valid_guesses_len;
-
-			while (j == valid_guesses_len)
+			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
+			print_center_text(main_window, y + 10, "What is your answer (a, b, c, d)?");
+			wrefresh(main_window);
+			getyx(main_window, y, x);
+			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+			i = 4;
+			choice = 4; // choice defaults to 4 which would make it an invalid guess
+			while (choice == 4)
 			{
-				if (color_num == 1) color_num = 2;
-				else color_num = 1;
-				attrset(COLOR_PAIR(color_num) | A_BOLD);
-				j = 0;
-				while (valid_guesses[j])
+				guess = getch(); // get a single character from user
+				guess = tolower(guess);
+				i = 0;
+				wmove(main_window, y + 2, 2);
+				while (valid_guesses[i]) // while going through all the valid guesses
 				{
-					if (guess == valid_guesses[j++]) { // if user made a valid guess
-						int choice;
+					if (guess == valid_guesses[i++]) { // if user made a valid guess
 						switch(guess)
 						{
 							case 'a':
@@ -155,31 +143,24 @@ int main(int argc, char *argv[])
 								choice = 3;
 								break;
 						}
-
-						move(y + 2, 3);
 						if (strcmp(round.choices[choice], trivia.correct_answer) == 0)
 						{
-							printw("%s IS CORRECT!", round.choices[choice]);
+							wprintw(main_window, "%s is correct!", round.choices[choice]);
 						}
 						else
 						{
-							printw("%s is wrong. The correct answer was %s", round.choices[choice], trivia.correct_answer);
+							wprintw(main_window, "Sorry, %s is wrong. The correct answer was %s.", round.choices[choice], trivia.correct_answer);
 						}
-						refresh();
+						wrefresh(main_window);
 						break;
 					}
 				}
-				if (j == valid_guesses_len) // if user made no valid guess
+				if (choice == 4) // if user made no valid guess
 				{
-					print_to_position(y + 2, 3, max_col, "INVALID GUESS");
-					refresh();
-					guess = getch();
-					guess = tolower(guess);
+					wprintw(main_window, "%c is an invalid guess. Please try again.", guess);
+					wrefresh(main_window);
 				}
 			}
-			attrset(COLOR_PAIR(3) | A_BOLD);
-			getyx(stdscr, y, x); // get the current curser position
-			print_to_position(y + 2, 3, max_col, "PRESS ANY KEY TO CONITNUE");
 			free(trivia.raw_info);
 			free(trivia.category);
 			free(trivia.question);
@@ -187,21 +168,20 @@ int main(int argc, char *argv[])
 			free(trivia.incorrect_answer1);
 			free(trivia.incorrect_answer2);
 			free(trivia.incorrect_answer3);
+			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
+			getyx(main_window, y, x);
+			print_center_text(main_window, y + 2, "Press any key to continue.");
+			wrefresh(main_window);
 			getch();
-			clear();
+			werase(main_window);
 		}
 	}
 	else
 	{
-		move(4, 3); // move cursor
 		endwin(); // End curses mode
 		fprintf(stderr, "Curl_easy_init() failed.\n");
 		return(1);
 	}
-	attrset(COLOR_PAIR(3) | A_BOLD);
-	getyx(stdscr, y, x); // get the current curser position
-	print_to_position(y + 2, 3, max_col, "PRESS ANY KEY TO EXIT");
-
 	free(trivia.raw_info);
 	free(trivia.category);
 	free(trivia.question);
@@ -211,7 +191,6 @@ int main(int argc, char *argv[])
 	free(trivia.incorrect_answer3);
 	curl_easy_cleanup(curl_handle); // cleanup curl stuff
 	curl_global_cleanup(); // after being done with libcurl, clean it up
-	getch();
 	endwin(); // End curses mode
 	return(0);
 };
@@ -255,11 +234,11 @@ static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, v
 
 void set_trivia_info(struct TriviaItem* trivia, struct CurrentRound* round)
 {
-	char category_str[] = "\"category\":\"";
+	char category_str[] = "\"category\":\""; // string to capture category
 	int category_str_len = strlen(category_str);
-	char type_str[] = "\",\"type\"";
 	char* category_start = strstr(trivia->raw_info, category_str);
 	category_start += category_str_len;
+	char type_str[] = "\",\"type\"";
 	char* type_start = strstr(category_start, type_str);
 	int category_len = type_start - category_start;
 
@@ -343,28 +322,13 @@ void set_trivia_info(struct TriviaItem* trivia, struct CurrentRound* round)
 	round->choices[3] = trivia->incorrect_answer3;
 };
 
-void print_to_position(int y, int x, int max_col, char* str_to_print)
-{
-	int i = 0;
-	move(y, x);
-	while (str_to_print[i] != '\0')
-	{
-		getyx(stdscr, y, x); // get the current curser position
-		if (x == (max_col - 3)) { // if we are at the end of the right side of the screen
-			move(y + 1, 3); // start at the beginning of the next row
-		}
-		printw("%c", str_to_print[i]);
-		i++;
-	}
-};
-
-void print_center_text(int row, char *text)
+void print_center_text(WINDOW* window, int row, char *text)
 {
 	int len, indent, y, width;
-	getmaxyx(stdscr, y, width); // get screen width
+	getmaxyx(window, y, width); // get screen width
 	len = strlen(text); // get text length
 	indent = (width - len)/2; // calculate indent
-	mvaddstr(row, indent, text); // print the string
+	mvwaddstr(window, row, indent, text); // print the string
 };
 
 void swap (char** a, char** b) // swap two char pointers
