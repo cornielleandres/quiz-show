@@ -22,13 +22,15 @@ struct TriviaItem {
 
 struct CurrentGame {
 	int level;
-	char* choices[4];
+	char** random_choices[4]; // double pointer used to randomly shuffle array of answer pointers
+	char* correct_choice;
+	int end_game;
 };
 
 void swap (char** a, char** b);
-void randomize(char* arr[], int arr_size);
+void randomize(char** arr[], int arr_size);
 void print_center_text(WINDOW* window, int row, char *text);
-void print_current_level(WINDOW* window, struct CurrentGame current_game, int row);
+void print_current_level(WINDOW* window, struct CurrentGame current_game, int row, char* money_levels[], int money_levels_len);
 void set_trivia_info(struct TriviaItem* trivia, struct CurrentGame* current_game);
 static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp);
 void init_curses();
@@ -42,8 +44,23 @@ int main(int argc, char *argv[])
 	char guess;
 	char valid_guesses[] = "abcd";
 	int max_row, max_col, y, x, i, choice;
+	char* money_levels[] = {
+		"$1,000,000",
+		"$500,000",
+		"$250,000",
+		"$100,000",
+		"$50,000",
+		"$25,000",
+		"$10,000",
+		"$5,000",
+		"$1,000",
+		"$500",
+		"$0"
+	};
+	int money_levels_len = 11;
 
 	current_game.level = 1;
+	current_game.end_game = 0;
 
 	init_curses(); // initialize curses
 	getmaxyx(stdscr, max_row, max_col); // find the boundaries of the screen
@@ -79,7 +96,7 @@ int main(int argc, char *argv[])
 
 			getyx(main_window, y, x);
 			wattrset(main_window, COLOR_PAIR(0));
-			print_current_level(main_window, current_game, y);
+			print_current_level(main_window, current_game, y, money_levels, money_levels_len);
 			getyx(main_window, y, x);
 			print_center_text(main_window, y + 2, "Press any key to continue.");
 			wrefresh(main_window);
@@ -97,11 +114,13 @@ int main(int argc, char *argv[])
 			}
 			wmove(main_window, 2, 0);
 			wclrtoeol(main_window);
+
 			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 			waddstr(main_window, trivia.raw_info);
+
 			decode_html_entities_utf8(trivia.raw_info, NULL);
 			set_trivia_info(&trivia, &current_game);
-			randomize(current_game.choices, 4);
+			randomize(current_game.random_choices, 4);
 
 			getyx(main_window, y, x);
 			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
@@ -110,20 +129,16 @@ int main(int argc, char *argv[])
 			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
 			mvwaddstr(main_window, y + 4, 0, trivia.question);
 
-			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
-
 			getyx(main_window, y, x);
+			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 			mvwaddstr(main_window, y + 2, 2, "a) ");
-			mvwaddstr(main_window, y + 2, 5, current_game.choices[0]);
-
+			mvwaddstr(main_window, y + 2, 5, (*current_game.random_choices)[0]);
 			mvwaddstr(main_window, y + 4, 2, "b) ");
-			mvwaddstr(main_window, y + 4, 5, current_game.choices[1]);
-
+			mvwaddstr(main_window, y + 4, 5, (*current_game.random_choices)[1]);
 			mvwaddstr(main_window, y + 6, 2, "c) ");
-			mvwaddstr(main_window, y + 6, 5, current_game.choices[2]);
-
+			mvwaddstr(main_window, y + 6, 5, (*current_game.random_choices)[2]);
 			mvwaddstr(main_window, y + 8, 2, "d) ");
-			mvwaddstr(main_window, y + 8, 5, current_game.choices[3]);
+			mvwaddstr(main_window, y + 8, 5, (*current_game.random_choices)[3]);
 
 			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
 			print_center_text(main_window, y + 10, "What is your answer (a, b, c, d)?");
@@ -138,6 +153,7 @@ int main(int argc, char *argv[])
 				guess = tolower(guess);
 				i = 0;
 				wmove(main_window, y + 2, 2);
+				wclrtoeol(main_window);
 				while (valid_guesses[i]) // while going through all the valid guesses
 				{
 					if (guess == valid_guesses[i++]) { // if user made a valid guess
@@ -157,16 +173,17 @@ int main(int argc, char *argv[])
 								choice = 3;
 								break;
 						}
-						if (strcmp(current_game.choices[choice], trivia.correct_answer) == 0)
+
+						if (strcmp((*current_game.random_choices)[choice], current_game.correct_choice) == 0)
 						{
-							current_game.level += 1;
-							wprintw(main_window, "%s is correct!", current_game.choices[choice]);
+							if (current_game.level++ == money_levels_len) current_game.end_game = 1;
+							wprintw(main_window, "%s is correct!", (*current_game.random_choices)[choice]);
 						}
 						else
 						{
-							wprintw(main_window, "Sorry, %s is wrong. It was %s.", current_game.choices[choice], trivia.correct_answer);
+							wprintw(main_window, "Sorry, %s is wrong. It was %s.", (*current_game.random_choices)[choice], current_game.correct_choice);
+							current_game.end_game = 1;
 						}
-						wrefresh(main_window);
 						break;
 					}
 				}
@@ -183,12 +200,34 @@ int main(int argc, char *argv[])
 			free(trivia.incorrect_answer1);
 			free(trivia.incorrect_answer2);
 			free(trivia.incorrect_answer3);
+			free(current_game.correct_choice);
 			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
 			getyx(main_window, y, x);
 			print_center_text(main_window, y + 2, "Press any key to continue.");
 			wrefresh(main_window);
 			getch();
 			werase(main_window);
+
+			if (current_game.end_game)
+			{
+				char buffer[21];
+				y = max_row / 2; // get middle row
+				print_center_text(main_window, y - 7, "Game over.");
+				if (current_game.level == money_levels_len)
+				{
+					snprintf(buffer, strlen(money_levels[i]) + 10, "You won %s!!! Congratulations!", money_levels[money_levels_len - current_game.level]);
+				}
+				else
+				{
+					snprintf(buffer, strlen(money_levels[i]) + 10, "You won %s.", money_levels[money_levels_len - current_game.level]);
+				}
+				print_center_text(main_window, y - 5, buffer);
+				print_center_text(main_window, y - 3, "Thanks for playing!");
+				print_center_text(main_window, y - 1, "Press any key to exit.");
+				wrefresh(main_window);
+				getch();
+				break;
+			}
 		}
 	}
 	else
@@ -197,13 +236,6 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Curl_easy_init() failed.\n");
 		return(1);
 	}
-	free(trivia.raw_info);
-	free(trivia.category);
-	free(trivia.question);
-	free(trivia.correct_answer);
-	free(trivia.incorrect_answer1);
-	free(trivia.incorrect_answer2);
-	free(trivia.incorrect_answer3);
 	curl_easy_cleanup(curl_handle); // cleanup curl stuff
 	curl_global_cleanup(); // after being done with libcurl, clean it up
 	endwin(); // End curses mode
@@ -252,12 +284,20 @@ void set_trivia_info(struct TriviaItem* trivia, struct CurrentGame* current_game
 	char category_str[] = "\"category\":\""; // string to capture category
 	int category_str_len = strlen(category_str);
 	char* category_start = strstr(trivia->raw_info, category_str);
+
+	/* THIS	CODE IS FOR TESTING PURPOSES ONLY */
+	/* COMMENT OUT char* category_start = ... ABOVE AND UNCOMMENT OUT THE CODE BELOW */
+	// char memory[] = "{\"response_code\":0,\"results\":[{\"category\":\"General Knowledge\",\"type\":\"multiple\",\"difficulty\":\"easy\",\"question\":\"What company developed the vocaloid Hatsune Miku?\",\"correct_answer\":\"Crypton Future Media\",\"incorrect_answers\":[\"Sega\",\"Sony\",\"Yamaha Corporation\"]}]}\0";
+	// char decoded_memory[1024];
+	// decode_html_entities_utf8(decoded_memory, memory);
+	// char* category_start = strstr(decoded_memory, category_str);
+
 	category_start += category_str_len;
 	char type_str[] = "\",\"type\"";
 	char* type_start = strstr(category_start, type_str);
 	int category_len = type_start - category_start;
 
-	trivia->category = (char*) malloc((category_len + 1) * sizeof(char));
+	trivia->category = malloc((category_len + 1) * sizeof(char));
 	trivia->category[category_len] = '\0';
 
 	int i = 0;
@@ -271,7 +311,7 @@ void set_trivia_info(struct TriviaItem* trivia, struct CurrentGame* current_game
 	char* correct_answer_start = strstr(question_start, correct_answer_str);
 	int question_len = correct_answer_start - question_start;
 
-	trivia->question = (char*) malloc((question_len + 1) * sizeof(char));
+	trivia->question = malloc((question_len + 1) * sizeof(char));
 	trivia->question[question_len] = '\0';
 
 	i = 0;
@@ -283,13 +323,18 @@ void set_trivia_info(struct TriviaItem* trivia, struct CurrentGame* current_game
 	char* incorrect_answers_start = strstr(correct_answer_start, incorrect_answers_str);
 	int correct_answer_len = incorrect_answers_start - correct_answer_start;
 
-	trivia->correct_answer = (char*) malloc((correct_answer_len + 1) * sizeof(char));
+	trivia->correct_answer = malloc((correct_answer_len + 1) * sizeof(char));
 	trivia->correct_answer[correct_answer_len] = '\0';
 
-	i = 0;
-	while (i < correct_answer_len) trivia->correct_answer[i++] = correct_answer_start[i];
+	current_game->correct_choice = malloc((correct_answer_len + 1) * sizeof(char));
+	current_game->correct_choice[correct_answer_len] = '\0';
 
-	current_game->choices[0] = trivia->correct_answer;
+	i = 0;
+	while (i < correct_answer_len)
+	{
+		trivia->correct_answer[i] = correct_answer_start[i];
+		current_game->correct_choice[i++] = correct_answer_start[i];
+	}
 
 	int incorrect_answers_str_len = strlen(incorrect_answers_str);
 	char end_str[] = "\"]";
@@ -312,29 +357,28 @@ void set_trivia_info(struct TriviaItem* trivia, struct CurrentGame* current_game
 	char* inc_answer3_start = answer_separator2_start + answer_separator_len;
 	int incorrect_answer3_len = strlen(inc_answer3_start);
 
-	trivia->incorrect_answer1 = (char*) malloc((incorrect_answer1_len + 1) * sizeof(char));
+	trivia->incorrect_answer1 = malloc((incorrect_answer1_len + 1) * sizeof(char));
 	trivia->incorrect_answer1[incorrect_answer1_len] = '\0';
 
 	i = 0;
 	while (i < incorrect_answer1_len) trivia->incorrect_answer1[i++] = incorrect_answers_start[i];
 
-	current_game->choices[1] = trivia->incorrect_answer1;
-
-	trivia->incorrect_answer2 = (char*) malloc((incorrect_answer2_len + 1) * sizeof(char));
+	trivia->incorrect_answer2 = malloc((incorrect_answer2_len + 1) * sizeof(char));
 	trivia->incorrect_answer2[incorrect_answer2_len] = '\0';
 
 	i = 0;
 	while (i < incorrect_answer2_len) trivia->incorrect_answer2[i++] = inc_answer2_start[i];
 
-	current_game->choices[2] = trivia->incorrect_answer2;
-
-	trivia->incorrect_answer3 = (char*) malloc((incorrect_answer3_len + 1) * sizeof(char));
+	trivia->incorrect_answer3 = malloc((incorrect_answer3_len + 1) * sizeof(char));
 	trivia->incorrect_answer3[incorrect_answer3_len] = '\0';
 
 	i = 0;
 	while (i < incorrect_answer3_len) trivia->incorrect_answer3[i++] = inc_answer3_start[i];
 
-	current_game->choices[3] = trivia->incorrect_answer3;
+	current_game->random_choices[0] = &trivia->correct_answer;
+	current_game->random_choices[1] = &trivia->incorrect_answer1;
+	current_game->random_choices[2] = &trivia->incorrect_answer2;
+	current_game->random_choices[3] = &trivia->incorrect_answer3;
 };
 
 void print_center_text(WINDOW* window, int row, char *text)
@@ -342,37 +386,24 @@ void print_center_text(WINDOW* window, int row, char *text)
 	int len, indent, y, width;
 	getmaxyx(window, y, width); // get screen width
 	len = strlen(text); // get text length
-	indent = (width - len)/2; // calculate indent
+	indent = (width - len) / 2; // calculate indent
 	mvwaddstr(window, row, indent, text); // print the string
 };
 
-void print_current_level(WINDOW* window, struct CurrentGame current_game, int row)
+void print_current_level(WINDOW* window, struct CurrentGame current_game, int row, char* money_levels[], int money_levels_len)
 {
 	char buffer[20];
-	char* levels[] = {
-		"$1,000,000",
-		"$500,000",
-		"$250,000",
-		"$100,000",
-		"$50,000",
-		"$25,000",
-		"$10,000",
-		"$5,000",
-		"$1,000",
-		"$500"
-	};
-	int levels_len = 10;
-	for (int i = 0; i < levels_len; i++)
+	for (int i = 0; i < money_levels_len; i++)
 	{
-		if (i == levels_len - current_game.level)
+		if (i == money_levels_len - current_game.level)
 		{
 			wattrset(window, COLOR_PAIR(3) | A_BOLD);
-			snprintf(buffer, strlen(levels[i]) + 9, "*** %s ***", levels[i]);
+			snprintf(buffer, strlen(money_levels[i]) + 9, "*** %s ***", money_levels[i]);
 		}
 		else
 		{
 			wattrset(window, COLOR_PAIR(0));
-			snprintf(buffer, strlen(levels[i]) + 1, "%s", levels[i]);
+			snprintf(buffer, strlen(money_levels[i]) + 1, "%s", money_levels[i]);
 		}
 		print_center_text(window, row + (2 * i) + 1, buffer);
 	}
@@ -385,7 +416,7 @@ void swap (char** a, char** b) // swap two char pointers
 	*b = temp;
 };
 
-void randomize(char* arr[], int arr_size) // generate a random permutation of arr[]
+void randomize(char** arr[], int arr_size) // generate a random permutation of arr[]
 {
 	srand(time(NULL)); // use a diff seed value to not get same result each time this is run
 
@@ -394,6 +425,6 @@ void randomize(char* arr[], int arr_size) // generate a random permutation of ar
 	for (int i = arr_size - 1; i > 0; i--)
 	{
 		int j = rand() % (i + 1); // pick a random index from 0 to i
-		swap(&arr[i], &arr[j]); // Swap arr[i] with the element at the randomly picked index
+		swap(&(*arr)[i], &(*arr)[j]); // swap arr[i] with the element at the randomly picked index
 	}
 };
