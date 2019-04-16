@@ -59,13 +59,13 @@ int main(int argc, char *argv[])
 	};
 	int money_levels_len = 11;
 
-	current_game.level = 1;
+	current_game.level = 0;
 	current_game.end_game = 0;
 
 	init_curses(); // initialize curses
 	getmaxyx(stdscr, max_row, max_col); // find the boundaries of the screen
 
-	char url[] = "https://opentdb.com/api.php?amount=1&category=9&difficulty=easy&type=multiple";
+	char url[] = "https://opentdb.com/api.php?amount=1&difficulty=easy&type=multiple";
 	curl_global_init(CURL_GLOBAL_ALL); // set up the program environment that libcurl needs
 	curl_handle = curl_easy_init(); // initialize the curl session
 
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
 
 						if (strcmp((*current_game.random_choices)[choice], current_game.correct_choice) == 0)
 						{
-							if (current_game.level++ == money_levels_len) current_game.end_game = 1;
+							if (++current_game.level == money_levels_len - 1) current_game.end_game = 1;
 							wprintw(main_window, "%s is correct!", (*current_game.random_choices)[choice]);
 						}
 						else
@@ -211,15 +211,16 @@ int main(int argc, char *argv[])
 			if (current_game.end_game)
 			{
 				char buffer[21];
+				int current_money_level = money_levels_len - current_game.level - 1;
 				y = max_row / 2; // get middle row
 				print_center_text(main_window, y - 7, "Game over.");
-				if (current_game.level == money_levels_len)
+				if (current_money_level == 0)
 				{
-					snprintf(buffer, strlen(money_levels[i]) + 10, "You won %s!!! Congratulations!", money_levels[money_levels_len - current_game.level]);
+					snprintf(buffer, strlen(money_levels[current_money_level]) + 36, "YOU'VE WON THE %s!!! Congratulations!", money_levels[current_money_level]);
 				}
 				else
 				{
-					snprintf(buffer, strlen(money_levels[i]) + 10, "You won %s.", money_levels[money_levels_len - current_game.level]);
+					snprintf(buffer, strlen(money_levels[current_money_level]) + 10, "You won %s.", money_levels[current_money_level]);
 				}
 				print_center_text(main_window, y - 5, buffer);
 				print_center_text(main_window, y - 3, "Thanks for playing!");
@@ -395,10 +396,10 @@ void print_current_level(WINDOW* window, struct CurrentGame current_game, int ro
 	char buffer[20];
 	for (int i = 0; i < money_levels_len; i++)
 	{
-		if (i == money_levels_len - current_game.level)
+		if (i == money_levels_len - current_game.level - 1)
 		{
 			wattrset(window, COLOR_PAIR(3) | A_BOLD);
-			snprintf(buffer, strlen(money_levels[i]) + 9, "*** %s ***", money_levels[i]);
+			snprintf(buffer, strlen(money_levels[i]) + 11, "**** %s ****", money_levels[i]);
 		}
 		else
 		{
