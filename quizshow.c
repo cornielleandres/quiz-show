@@ -22,7 +22,7 @@ struct TriviaItem {
 
 struct CurrentGame {
 	int level;
-	char** random_choices[4]; // double pointer used to randomly shuffle array of answer pointers
+	char** random_choices[4 * sizeof(char*)]; // used to randomly shuffle array of answer pointers
 	char* correct_choice;
 	int end_game;
 };
@@ -31,7 +31,6 @@ void swap (char** a, char** b);
 void randomize(char** arr[], int arr_size);
 void print_center_text(WINDOW* window, int row, char *text);
 void print_current_level(WINDOW* window, struct CurrentGame current_game, int row, char* money_levels[], int money_levels_len);
-void set_trivia_info(struct TriviaItem* trivia, struct CurrentGame* current_game);
 static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp);
 void init_curses();
 
@@ -61,6 +60,38 @@ int main(int argc, char *argv[])
 
 	current_game.level = 0;
 	current_game.end_game = 0;
+
+	// trivia info variables
+	char category_str[] = "\"category\":\"";
+	char type_str[] = "\",\"type\"";
+	char question_str[] = "\"question\":\"";
+	char correct_answer_str[] = "\",\"correct_answer\":\"";
+	char incorrect_answers_str[] = "\",\"incorrect_answers\":[\"";
+	char answer_separator[] = "\",\"";
+	char end_str[] = "\"]";
+	int	category_str_len,
+		category_len,
+		question_str_len,
+		question_len,
+		correct_answer_str_len,
+		correct_answer_len,
+		incorrect_answers_str_len,
+		incorrect_answers_len,
+		incorrect_answer1_len,
+		answer_separator_len,
+		incorrect_answer2_len,
+		incorrect_answer3_len;
+	char *category_start,
+		*type_start,
+		*question_start,
+		*correct_answer_start,
+		*incorrect_answers_start,
+		*end_start,
+		*incorrect_answers,
+		*answer_separator_start,
+		*inc_answer2_start,
+		*answer_separator2_start,
+		*inc_answer3_start;
 
 	init_curses(); // initialize curses
 	getmaxyx(stdscr, max_row, max_col); // find the boundaries of the screen
@@ -112,14 +143,109 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 				return(1);
 			}
+
 			wmove(main_window, 2, 0);
 			wclrtoeol(main_window);
 
 			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 			waddstr(main_window, trivia.raw_info);
-
 			decode_html_entities_utf8(trivia.raw_info, NULL);
-			set_trivia_info(&trivia, &current_game);
+
+			category_str_len = strlen(category_str);
+			category_start = strstr(trivia.raw_info, category_str);
+
+			/* THIS	CODE IS FOR TESTING PURPOSES ONLY */
+			/* COMMENT OUT category_start = ... ABOVE AND UNCOMMENT OUT THE CODE BELOW */
+			// char memory[] = "{\"response_code\":0,\"results\":[{\"category\":\"Entertainment: Film\",\"type\":\"multiple\",\"difficulty\":\"easy\",\"question\":\"This movie contains the quote, &quot;Nobody puts Baby in a corner.&quot;\",\"correct_answer\":\"Dirty Dancing\",\"incorrect_answers\":[\"Three Men and a Baby\",\"Ferris Bueller&#039;s Day Off\",\"Pretty in Pink\"]}]}";
+			// char decoded_memory[1024];
+			// decode_html_entities_utf8(decoded_memory, memory);
+			// category_start = strstr(decoded_memory, category_str);
+
+			category_start += category_str_len;
+			char type_str[] = "\",\"type\"";
+			type_start = strstr(category_start, type_str);
+			category_len = type_start - category_start;
+
+			trivia.category = malloc((category_len + 1) * sizeof(char));
+			trivia.category[category_len] = '\0';
+
+			i = 0;
+			while (i < category_len) trivia.category[i++] = category_start[i];
+
+			question_str_len = strlen(question_str);
+			question_start = strstr(type_start, question_str);
+			question_start += question_str_len;
+			correct_answer_start = strstr(question_start, correct_answer_str);
+			question_len = correct_answer_start - question_start;
+
+			trivia.question = malloc((question_len + 1) * sizeof(char));
+			trivia.question[question_len] = '\0';
+
+			i = 0;
+			while (i < question_len) trivia.question[i++] = question_start[i];
+
+			correct_answer_str_len = strlen(correct_answer_str);
+			correct_answer_start += correct_answer_str_len;
+			incorrect_answers_start = strstr(correct_answer_start, incorrect_answers_str);
+			correct_answer_len = incorrect_answers_start - correct_answer_start;
+
+			trivia.correct_answer = malloc((correct_answer_len + 1) * sizeof(char));
+			trivia.correct_answer[correct_answer_len] = '\0';
+
+			current_game.correct_choice = malloc((correct_answer_len + 1) * sizeof(char));
+			current_game.correct_choice[correct_answer_len] = '\0';
+
+			i = 0;
+			while (i < correct_answer_len)
+			{
+				trivia.correct_answer[i] = correct_answer_start[i];
+				current_game.correct_choice[i++] = correct_answer_start[i];
+			}
+
+			incorrect_answers_str_len = strlen(incorrect_answers_str);
+			incorrect_answers_start += incorrect_answers_str_len;
+			end_start = strstr(incorrect_answers_start, end_str);
+			incorrect_answers_len = end_start - incorrect_answers_start;
+			incorrect_answers = malloc((incorrect_answers_len + 1) * sizeof(char));
+			incorrect_answers[incorrect_answers_len] = '\0';
+
+			i = 0;
+			while (i < incorrect_answers_len) incorrect_answers[i++] = incorrect_answers_start[i];
+
+			answer_separator_start = strstr(incorrect_answers, answer_separator);
+			incorrect_answer1_len = answer_separator_start - incorrect_answers;
+
+			answer_separator_len = strlen(answer_separator);
+			inc_answer2_start = answer_separator_start + answer_separator_len;
+			answer_separator2_start = strstr(inc_answer2_start, answer_separator);
+			incorrect_answer2_len = answer_separator2_start - inc_answer2_start;
+
+			inc_answer3_start = answer_separator2_start + answer_separator_len;
+			incorrect_answer3_len = strlen(inc_answer3_start);
+
+			trivia.incorrect_answer1 = malloc((incorrect_answer1_len + 1) * sizeof(char));
+			trivia.incorrect_answer1[incorrect_answer1_len] = '\0';
+
+			i = 0;
+			while (i < incorrect_answer1_len) trivia.incorrect_answer1[i++] = incorrect_answers_start[i];
+
+			trivia.incorrect_answer2 = malloc((incorrect_answer2_len + 1) * sizeof(char));
+			trivia.incorrect_answer2[incorrect_answer2_len] = '\0';
+
+			i = 0;
+			while (i < incorrect_answer2_len) trivia.incorrect_answer2[i++] = inc_answer2_start[i];
+
+			trivia.incorrect_answer3 = malloc((incorrect_answer3_len + 1) * sizeof(char));
+			trivia.incorrect_answer3[incorrect_answer3_len] = '\0';
+
+			i = 0;
+			while (i < incorrect_answer3_len) trivia.incorrect_answer3[i++] = inc_answer3_start[i];
+
+			current_game.random_choices[0] = &trivia.correct_answer;
+			current_game.random_choices[1] = &trivia.incorrect_answer1;
+			current_game.random_choices[2] = &trivia.incorrect_answer2;
+			current_game.random_choices[3] = &trivia.incorrect_answer3;
+
 			randomize(current_game.random_choices, 4);
 
 			getyx(main_window, y, x);
@@ -201,6 +327,7 @@ int main(int argc, char *argv[])
 			free(trivia.incorrect_answer2);
 			free(trivia.incorrect_answer3);
 			free(current_game.correct_choice);
+			free(incorrect_answers);
 			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
 			getyx(main_window, y, x);
 			print_center_text(main_window, y + 2, "Press any key to continue.");
@@ -280,108 +407,6 @@ static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, v
 	return realsize;
 };
 
-void set_trivia_info(struct TriviaItem* trivia, struct CurrentGame* current_game)
-{
-	char category_str[] = "\"category\":\""; // string to capture category
-	int category_str_len = strlen(category_str);
-	char* category_start = strstr(trivia->raw_info, category_str);
-
-	/* THIS	CODE IS FOR TESTING PURPOSES ONLY */
-	/* COMMENT OUT char* category_start = ... ABOVE AND UNCOMMENT OUT THE CODE BELOW */
-	// char memory[] = "{\"response_code\":0,\"results\":[{\"category\":\"General Knowledge\",\"type\":\"multiple\",\"difficulty\":\"easy\",\"question\":\"What company developed the vocaloid Hatsune Miku?\",\"correct_answer\":\"Crypton Future Media\",\"incorrect_answers\":[\"Sega\",\"Sony\",\"Yamaha Corporation\"]}]}\0";
-	// char decoded_memory[1024];
-	// decode_html_entities_utf8(decoded_memory, memory);
-	// char* category_start = strstr(decoded_memory, category_str);
-
-	category_start += category_str_len;
-	char type_str[] = "\",\"type\"";
-	char* type_start = strstr(category_start, type_str);
-	int category_len = type_start - category_start;
-
-	trivia->category = malloc((category_len + 1) * sizeof(char));
-	trivia->category[category_len] = '\0';
-
-	int i = 0;
-	while (i != category_len) trivia->category[i++] = category_start[i];
-
-	char question_str[] = "\"question\":\"";
-	int question_str_len = strlen(question_str);
-	char correct_answer_str[] = "\",\"correct_answer\":\"";
-	char* question_start = strstr(type_start, question_str);
-	question_start += question_str_len;
-	char* correct_answer_start = strstr(question_start, correct_answer_str);
-	int question_len = correct_answer_start - question_start;
-
-	trivia->question = malloc((question_len + 1) * sizeof(char));
-	trivia->question[question_len] = '\0';
-
-	i = 0;
-	while (i != question_len) trivia->question[i++] = question_start[i];
-
-	int correct_answer_str_len = strlen(correct_answer_str);
-	char incorrect_answers_str[] = "\",\"incorrect_answers\":[\"";
-	correct_answer_start += correct_answer_str_len;
-	char* incorrect_answers_start = strstr(correct_answer_start, incorrect_answers_str);
-	int correct_answer_len = incorrect_answers_start - correct_answer_start;
-
-	trivia->correct_answer = malloc((correct_answer_len + 1) * sizeof(char));
-	trivia->correct_answer[correct_answer_len] = '\0';
-
-	current_game->correct_choice = malloc((correct_answer_len + 1) * sizeof(char));
-	current_game->correct_choice[correct_answer_len] = '\0';
-
-	i = 0;
-	while (i < correct_answer_len)
-	{
-		trivia->correct_answer[i] = correct_answer_start[i];
-		current_game->correct_choice[i++] = correct_answer_start[i];
-	}
-
-	int incorrect_answers_str_len = strlen(incorrect_answers_str);
-	char end_str[] = "\"]";
-	incorrect_answers_start += incorrect_answers_str_len;
-	char* end_start = strstr(incorrect_answers_start, end_str);
-	int incorrect_answers_len = end_start - incorrect_answers_start;
-	char incorrect_answers[incorrect_answers_len];
-	strncpy(incorrect_answers, incorrect_answers_start, incorrect_answers_len);
-	incorrect_answers[incorrect_answers_len] = '\0';
-
-	char answer_separator[] = "\",\"";
-	char* answer_separator_start = strstr(incorrect_answers, answer_separator);
-	int incorrect_answer1_len = answer_separator_start - incorrect_answers;
-
-	int answer_separator_len = strlen(answer_separator);
-	char* inc_answer2_start = answer_separator_start + answer_separator_len;
-	char* answer_separator2_start = strstr(inc_answer2_start, answer_separator);
-	int incorrect_answer2_len = answer_separator2_start - inc_answer2_start;
-
-	char* inc_answer3_start = answer_separator2_start + answer_separator_len;
-	int incorrect_answer3_len = strlen(inc_answer3_start);
-
-	trivia->incorrect_answer1 = malloc((incorrect_answer1_len + 1) * sizeof(char));
-	trivia->incorrect_answer1[incorrect_answer1_len] = '\0';
-
-	i = 0;
-	while (i < incorrect_answer1_len) trivia->incorrect_answer1[i++] = incorrect_answers_start[i];
-
-	trivia->incorrect_answer2 = malloc((incorrect_answer2_len + 1) * sizeof(char));
-	trivia->incorrect_answer2[incorrect_answer2_len] = '\0';
-
-	i = 0;
-	while (i < incorrect_answer2_len) trivia->incorrect_answer2[i++] = inc_answer2_start[i];
-
-	trivia->incorrect_answer3 = malloc((incorrect_answer3_len + 1) * sizeof(char));
-	trivia->incorrect_answer3[incorrect_answer3_len] = '\0';
-
-	i = 0;
-	while (i < incorrect_answer3_len) trivia->incorrect_answer3[i++] = inc_answer3_start[i];
-
-	current_game->random_choices[0] = &trivia->correct_answer;
-	current_game->random_choices[1] = &trivia->incorrect_answer1;
-	current_game->random_choices[2] = &trivia->incorrect_answer2;
-	current_game->random_choices[3] = &trivia->incorrect_answer3;
-};
-
 void print_center_text(WINDOW* window, int row, char *text)
 {
 	int len, indent, y, width;
@@ -411,7 +436,7 @@ void print_current_level(WINDOW* window, struct CurrentGame current_game, int ro
 };
 
 void swap (char** a, char** b) // swap two char pointers
-{ 
+{
 	char* temp = *a;
 	*a = *b;
 	*b = temp;
