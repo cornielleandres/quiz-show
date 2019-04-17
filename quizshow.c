@@ -126,9 +126,9 @@ int main(int argc, char *argv[])
 			trivia.size = 0; // no data at this point
 
 			getyx(main_window, y, x);
-			wattrset(main_window, COLOR_PAIR(0));
 			print_current_level(main_window, current_game, y, money_levels, money_levels_len);
 			getyx(main_window, y, x);
+			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
 			print_center_text(main_window, y + 2, "Press any key to continue.");
 			wrefresh(main_window);
 			getch();
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 
 			/* THIS	CODE IS FOR TESTING PURPOSES ONLY */
 			/* COMMENT OUT category_start = ... ABOVE AND UNCOMMENT OUT THE CODE BELOW */
-			// char memory[] = "{\"response_code\":0,\"results\":[{\"category\":\"Entertainment: Film\",\"type\":\"multiple\",\"difficulty\":\"easy\",\"question\":\"This movie contains the quote, &quot;Nobody puts Baby in a corner.&quot;\",\"correct_answer\":\"Dirty Dancing\",\"incorrect_answers\":[\"Three Men and a Baby\",\"Ferris Bueller&#039;s Day Off\",\"Pretty in Pink\"]}]}";
+			// char memory[] = "{\"response_code\":0,\"results\":[{\"category\":\"Science: Computers\",\"type\":\"multiple\",\"difficulty\":\"easy\",\"question\":\"The C programming language was created by this American computer scientist. \",\"correct_answer\":\"Dennis Ritchie\",\"incorrect_answers\":[\"Tim Berners Lee\",\"al-Khw\u0101rizm\u012b\",\"Willis Ware\"]}]}";
 			// char decoded_memory[1024];
 			// decode_html_entities_utf8(decoded_memory, memory);
 			// category_start = strstr(decoded_memory, category_str);
@@ -249,14 +249,12 @@ int main(int argc, char *argv[])
 			randomize(current_game.random_choices, 4);
 
 			getyx(main_window, y, x);
-			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+			wattrset(main_window, COLOR_PAIR(0));
 			print_center_text(main_window, y + 2, trivia.category);
-
-			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
 			mvwaddstr(main_window, y + 4, 0, trivia.question);
 
 			getyx(main_window, y, x);
-			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
+			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
 			mvwaddstr(main_window, y + 2, 2, "a) ");
 			mvwaddstr(main_window, y + 2, 5, (*current_game.random_choices)[0]);
 			mvwaddstr(main_window, y + 4, 2, "b) ");
@@ -266,11 +264,11 @@ int main(int argc, char *argv[])
 			mvwaddstr(main_window, y + 8, 2, "d) ");
 			mvwaddstr(main_window, y + 8, 5, (*current_game.random_choices)[3]);
 
-			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
+			wattrset(main_window, COLOR_PAIR(0));
 			print_center_text(main_window, y + 10, "What is your answer (a, b, c, d)?");
 			wrefresh(main_window);
 			getyx(main_window, y, x);
-			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 			i = 4;
 			choice = 4; // choice defaults to 4 which would make it an invalid guess
 			while (choice == 4)
@@ -328,7 +326,7 @@ int main(int argc, char *argv[])
 			free(trivia.incorrect_answer3);
 			free(current_game.correct_choice);
 			free(incorrect_answers);
-			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
+			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
 			getyx(main_window, y, x);
 			print_center_text(main_window, y + 2, "Press any key to continue.");
 			wrefresh(main_window);
@@ -337,21 +335,35 @@ int main(int argc, char *argv[])
 
 			if (current_game.end_game)
 			{
-				char buffer[21];
+				int len, indent, height, width;
 				int current_money_level = money_levels_len - current_game.level - 1;
 				y = max_row / 2; // get middle row
 				print_center_text(main_window, y - 7, "Game over.");
+				getmaxyx(main_window, height, width); // get screen width
 				if (current_money_level == 0)
 				{
-					snprintf(buffer, strlen(money_levels[current_money_level]) + 36, "YOU'VE WON THE %s!!! Congratulations!", money_levels[current_money_level]);
+					len = strlen(money_levels[current_money_level]) + 36;
+					indent = (width - len) / 2; // calculate indent
+					mvwaddstr(main_window, y - 5, indent, "YOU'VE WON THE ");
+					getyx(main_window, y, x);
+					wattrset(main_window, COLOR_PAIR(4) | A_BOLD);
+					wprintw(main_window, "%s", money_levels[current_money_level]);
+					wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+					waddstr(main_window, "!!! Congratulations!");
 				}
 				else
 				{
-					snprintf(buffer, strlen(money_levels[current_money_level]) + 10, "You won %s.", money_levels[current_money_level]);
+					len = strlen(money_levels[current_money_level]) + 10;
+					indent = (width - len) / 2; // calculate indent
+					mvwaddstr(main_window, y - 5, indent, "You won ");
+					getyx(main_window, y, x);
+					wattrset(main_window, COLOR_PAIR(4) | A_BOLD);
+					wprintw(main_window, "%s", money_levels[current_money_level]);
+					wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
 				}
-				print_center_text(main_window, y - 5, buffer);
-				print_center_text(main_window, y - 3, "Thanks for playing!");
-				print_center_text(main_window, y - 1, "Press any key to exit.");
+				getyx(main_window, y, x);
+				print_center_text(main_window, y + 1, "Thanks for playing!");
+				print_center_text(main_window, y + 3, "Press any key to exit.");
 				wrefresh(main_window);
 				getch();
 				break;
@@ -384,6 +396,7 @@ void init_curses()
 	init_pair(1, COLOR_CYAN, COLOR_BLACK);
 	init_pair(2, COLOR_GREEN, COLOR_BLACK);
 	init_pair(3, COLOR_BLUE, COLOR_BLACK);
+	init_pair(4, COLOR_YELLOW, COLOR_BLACK);
 };
 
 static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -423,7 +436,7 @@ void print_current_level(WINDOW* window, struct CurrentGame current_game, int ro
 	{
 		if (i == money_levels_len - current_game.level - 1)
 		{
-			wattrset(window, COLOR_PAIR(3) | A_BOLD);
+			wattrset(window, COLOR_PAIR(2) | A_BOLD);
 			snprintf(buffer, strlen(money_levels[i]) + 11, "**** %s ****", money_levels[i]);
 		}
 		else
