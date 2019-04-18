@@ -8,6 +8,8 @@
 #include <curl/curl.h>
 #include "entities.h"
 
+#define MAX_URL_LEN 83
+
 
 struct TriviaItem {
 	char* raw_info;
@@ -81,7 +83,9 @@ int main(int argc, char *argv[])
 		answer_separator_len,
 		incorrect_answer2_len,
 		incorrect_answer3_len;
-	char *category_start,
+	char *url,
+		*difficulty,
+		*category_start,
 		*type_start,
 		*question_start,
 		*correct_answer_start,
@@ -96,15 +100,10 @@ int main(int argc, char *argv[])
 	init_curses(); // initialize curses
 	getmaxyx(stdscr, max_row, max_col); // find the boundaries of the screen
 
-	char url[] = "https://opentdb.com/api.php?amount=1&difficulty=easy&type=multiple";
 	curl_global_init(CURL_GLOBAL_ALL); // set up the program environment that libcurl needs
 	curl_handle = curl_easy_init(); // initialize the curl session
 
 	if (curl_handle) {
-		curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_trivia_callback); // send data here
-		curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&trivia); // pass trivia struct
-		curl_easy_setopt(curl_handle, CURLOPT_URL, url); // specify URL to get
-
 		WINDOW* main_window = subwin(stdscr, max_row - 4, max_col - 4, 3, 2);
 		border(
 			ACS_VLINE, // left side
@@ -117,8 +116,72 @@ int main(int argc, char *argv[])
 			ACS_LRCORNER // lower-right corner
 		);
 		attrset(COLOR_PAIR(1) | A_BOLD);
-		print_center_text(stdscr, 2, "Welcome to the Quiz Show!");
+		print_center_text(stdscr, 2, "Welcome to Who Wants to be a Millionaire!");
+		max_row = getmaxy(main_window);
+		y = max_row / 2; // get middle row
+		wattrset(main_window, COLOR_PAIR(0));
+		print_center_text(main_window, y - 6, "Choose a category:");
+		wattrset(main_window, COLOR_PAIR(5) | A_BOLD);
+		print_center_text(main_window, y - 4, "a) Science & Nature");
+		print_center_text(main_window, y - 2, "b) Computers");
+		print_center_text(main_window, y, "c) Geography");
+		print_center_text(main_window, y + 2, "d) General Knowledge");
+		wattrset(main_window, COLOR_PAIR(0));
+		print_center_text(main_window, y + 6, "What is your answer (a, b, c, d)?");
 		refresh(); // refresh stdscr to show border and title
+
+		char buffer[MAX_URL_LEN];
+		choice = 0; // choice defaults to 0 which would make it an invalid guess
+		while (choice == 0)
+		{
+			guess = getch();
+			guess = tolower(guess);
+			i = 0;
+			wmove(main_window, y + 8, 2);
+			while (valid_guesses[i]) // while going through all the valid guesses
+			{
+				if (guess == valid_guesses[i++]) { // if user made a valid guess
+					switch(guess)
+					{
+						case 'a':
+						default:
+							choice = 17;
+							break;
+						case 'b':
+							choice = 18;
+							break;
+						case 'c':
+							choice = 22;
+							break;
+						case 'd':
+							choice = 9;
+							break;
+					}
+					snprintf(buffer, 81, "https://opentdb.com/api.php?amount=1&category=%d&type=multiple&difficulty=easy", choice);
+					x = strlen(buffer);
+					url = malloc(MAX_URL_LEN * sizeof(char));
+					url[x] = '\0';
+
+					i = 0;
+					while (i < x)
+					{
+						url[i] = buffer[i];
+						i++;
+					}
+					break;
+				}
+			}
+			if (choice == 0) // if user made no valid guess
+			{
+				wprintw(main_window, "%c is an invalid guess. Please try again.", guess);
+				wrefresh(main_window);
+			}
+		}
+		werase(main_window);
+
+		curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_trivia_callback); // send data here
+		curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&trivia); // pass trivia struct
+		curl_easy_setopt(curl_handle, CURLOPT_URL, url); // specify URL to get
 
 		while (TRUE)
 		{
@@ -134,8 +197,55 @@ int main(int argc, char *argv[])
 			getch();
 			werase(main_window);
 
+			if (current_game.level == 7) // change difficulty from easy to medium
+			{
+				difficulty = strstr(url, "easy");
+				x = difficulty - url;
+				url[x] = 'm';
+				url[x + 1] = 'e';
+				url[x + 2] = 'd';
+				url[x + 3] = 'i';
+				url[x + 4] = 'u';
+				url[x + 5] = 'm';
+				url[x + 6] = '\0';
+				curl_easy_setopt(curl_handle, CURLOPT_URL, url); // specify new URL to get
+				getyx(main_window, y, x);
+				y = max_row / 2; // get middle row
+				wattrset(main_window, COLOR_PAIR(0));
+				print_center_text(main_window, y - 4, "Time for the $100,000 question.");
+				print_center_text(main_window, y - 2, "Questions will get a bit tougher from now on.");
+				wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+				print_center_text(main_window, y, "Press any key to continue.");
+				wrefresh(main_window);
+				getch();
+				werase(main_window);
+			}
+
+			if (current_game.level == 9) // change difficulty from medium to hard
+			{
+				difficulty = strstr(url, "medium");
+				x = difficulty - url;
+				url[x] = 'h';
+				url[x + 1] = 'a';
+				url[x + 2] = 'r';
+				url[x + 3] = 'd';
+				url[x + 4] = '\0';
+				curl_easy_setopt(curl_handle, CURLOPT_URL, url); // specify new URL to get
+				getyx(main_window, y, x);
+				y = max_row / 2; // get middle row
+				wattrset(main_window, COLOR_PAIR(0));
+				print_center_text(main_window, y - 6, "Time for the $1,000,000 question!");
+				print_center_text(main_window, y - 4, "This one will be really hard.");
+				print_center_text(main_window, y - 2, "Are you ready?");
+				wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+				print_center_text(main_window, y, "Press any key to continue.");
+				wrefresh(main_window);
+				getch();
+				werase(main_window);
+			}
+
 			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
-			print_center_text(main_window, 2, "Fetching trivia question...");
+			print_center_text(main_window, 2, "Fetching trivia question. Please wait...");
 			wrefresh(main_window);
 			res = curl_easy_perform(curl_handle); // get the data
 			if (res != CURLE_OK) { // check for errors
@@ -147,19 +257,10 @@ int main(int argc, char *argv[])
 			wmove(main_window, 2, 0);
 			wclrtoeol(main_window);
 
-			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
-			waddstr(main_window, trivia.raw_info);
 			decode_html_entities_utf8(trivia.raw_info, NULL);
 
 			category_str_len = strlen(category_str);
 			category_start = strstr(trivia.raw_info, category_str);
-
-			/* THIS	CODE IS FOR TESTING PURPOSES ONLY */
-			/* COMMENT OUT category_start = ... ABOVE AND UNCOMMENT OUT THE CODE BELOW */
-			// char memory[] = "{\"response_code\":0,\"results\":[{\"category\":\"Science: Computers\",\"type\":\"multiple\",\"difficulty\":\"easy\",\"question\":\"The C programming language was created by this American computer scientist. \",\"correct_answer\":\"Dennis Ritchie\",\"incorrect_answers\":[\"Tim Berners Lee\",\"al-Khw\u0101rizm\u012b\",\"Willis Ware\"]}]}";
-			// char decoded_memory[1024];
-			// decode_html_entities_utf8(decoded_memory, memory);
-			// category_start = strstr(decoded_memory, category_str);
 
 			category_start += category_str_len;
 			char type_str[] = "\",\"type\"";
@@ -249,12 +350,13 @@ int main(int argc, char *argv[])
 			randomize(current_game.random_choices, 4);
 
 			getyx(main_window, y, x);
+			wattrset(main_window, COLOR_PAIR(1) | A_BOLD);
+			print_center_text(main_window, y, trivia.category);
 			wattrset(main_window, COLOR_PAIR(0));
-			print_center_text(main_window, y + 2, trivia.category);
 			mvwaddstr(main_window, y + 4, 0, trivia.question);
 
 			getyx(main_window, y, x);
-			wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+			wattrset(main_window, COLOR_PAIR(5) | A_BOLD);
 			mvwaddstr(main_window, y + 2, 2, "a) ");
 			mvwaddstr(main_window, y + 2, 5, (*current_game.random_choices)[0]);
 			mvwaddstr(main_window, y + 4, 2, "b) ");
@@ -268,7 +370,6 @@ int main(int argc, char *argv[])
 			print_center_text(main_window, y + 10, "What is your answer (a, b, c, d)?");
 			wrefresh(main_window);
 			getyx(main_window, y, x);
-			wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 			i = 4;
 			choice = 4; // choice defaults to 4 which would make it an invalid guess
 			while (choice == 4)
@@ -300,12 +401,24 @@ int main(int argc, char *argv[])
 
 						if (strcmp((*current_game.random_choices)[choice], current_game.correct_choice) == 0)
 						{
-							if (++current_game.level == money_levels_len - 1) current_game.end_game = 1;
-							wprintw(main_window, "%s is correct!", (*current_game.random_choices)[choice]);
+							if (++current_game.level >= money_levels_len - 1) current_game.end_game = 1;
+							wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
+							wprintw(main_window, "%s", (*current_game.random_choices)[choice]);
+							wattrset(main_window, COLOR_PAIR(0));
+							wprintw(main_window, " is correct!");
 						}
 						else
 						{
-							wprintw(main_window, "Sorry, %s is wrong. It was %s.", (*current_game.random_choices)[choice], current_game.correct_choice);
+							wattrset(main_window, COLOR_PAIR(0));
+							wprintw(main_window, "Sorry, ");
+							wattrset(main_window, COLOR_PAIR(4) | A_BOLD);
+							wprintw(main_window, "%s", (*current_game.random_choices)[choice]);
+							wattrset(main_window, COLOR_PAIR(0));
+							wprintw(main_window, " is wrong. ");
+							wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
+							wprintw(main_window, "%s", current_game.correct_choice);
+							wattrset(main_window, COLOR_PAIR(0));
+							wprintw(main_window, " was the correct answer.");
 							current_game.end_game = 1;
 						}
 						break;
@@ -338,18 +451,22 @@ int main(int argc, char *argv[])
 				int len, indent, height, width;
 				int current_money_level = money_levels_len - current_game.level - 1;
 				y = max_row / 2; // get middle row
+				wattrset(main_window, COLOR_PAIR(4) | A_BOLD);
 				print_center_text(main_window, y - 7, "Game over.");
 				getmaxyx(main_window, height, width); // get screen width
+				wattrset(main_window, COLOR_PAIR(0));
 				if (current_money_level == 0)
 				{
-					len = strlen(money_levels[current_money_level]) + 36;
+					len = strlen(money_levels[current_money_level]) + 18;
 					indent = (width - len) / 2; // calculate indent
 					mvwaddstr(main_window, y - 5, indent, "YOU'VE WON THE ");
 					getyx(main_window, y, x);
-					wattrset(main_window, COLOR_PAIR(4) | A_BOLD);
+					wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 					wprintw(main_window, "%s", money_levels[current_money_level]);
-					wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
-					waddstr(main_window, "!!! Congratulations!");
+					wattrset(main_window, COLOR_PAIR(0));
+					waddstr(main_window, "!!!");
+					getyx(main_window, y, x);
+					print_center_text(main_window, y + 2, "Congratulations!");
 				}
 				else
 				{
@@ -357,14 +474,16 @@ int main(int argc, char *argv[])
 					indent = (width - len) / 2; // calculate indent
 					mvwaddstr(main_window, y - 5, indent, "You won ");
 					getyx(main_window, y, x);
-					wattrset(main_window, COLOR_PAIR(4) | A_BOLD);
+					wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
 					wprintw(main_window, "%s", money_levels[current_money_level]);
-					wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+					wattrset(main_window, COLOR_PAIR(0));
 				}
 				getyx(main_window, y, x);
-				print_center_text(main_window, y + 1, "Thanks for playing!");
-				print_center_text(main_window, y + 3, "Press any key to exit.");
+				print_center_text(main_window, y + 2, "Thanks for playing!");
+				wattrset(main_window, COLOR_PAIR(3) | A_BOLD);
+				print_center_text(main_window, y + 4, "Press any key to exit.");
 				wrefresh(main_window);
+				free(url);
 				getch();
 				break;
 			}
@@ -396,7 +515,8 @@ void init_curses()
 	init_pair(1, COLOR_CYAN, COLOR_BLACK);
 	init_pair(2, COLOR_GREEN, COLOR_BLACK);
 	init_pair(3, COLOR_BLUE, COLOR_BLACK);
-	init_pair(4, COLOR_YELLOW, COLOR_BLACK);
+	init_pair(4, COLOR_RED, COLOR_BLACK);
+	init_pair(5, COLOR_YELLOW, COLOR_BLACK);
 };
 
 static size_t write_trivia_callback(void *contents, size_t size, size_t nmemb, void *userp)
