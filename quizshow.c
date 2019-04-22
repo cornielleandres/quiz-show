@@ -459,14 +459,62 @@ int main(int argc, char *argv[])
 				{
 					len = strlen(money_levels[current_money_level]) + 18;
 					indent = (width - len) / 2; // calculate indent
-					mvwaddstr(main_window, y - 5, indent, "YOU'VE WON THE ");
-					getyx(main_window, y, x);
+					wmove(main_window, y - 5, indent);
+
+					char *t;
+					char text[] = "YOU'VE WON THE ";
+					len = strlen(text);
+					t = text; // initialize pointer
+					i = 0;
+					while(i < len)
+					{
+						waddch(main_window, *(t + i));
+						wrefresh(main_window);
+						napms(100); // .1 sec. delay
+						i++;
+					}
+
 					wattrset(main_window, COLOR_PAIR(2) | A_BOLD);
-					wprintw(main_window, "%s", money_levels[current_money_level]);
+					t = money_levels[current_money_level];
+					len = strlen(money_levels[current_money_level]);
+					i = 0;
+					while(i < len)
+					{
+						waddch(main_window, *(t + i));
+						wrefresh(main_window);
+						napms(100); // .1 sec. delay
+						i++;
+					}
+
+					char exclamations[] = "!!!";
+					len = strlen(exclamations);
+					t = exclamations;
+					i = 0;
+					while(i < len)
+					{
+						waddch(main_window, *(t + i));
+						wrefresh(main_window);
+						napms(100); // .1 sec. delay
+						i++;
+					}
+					napms(300); // .3 sec. delay
+
 					wattrset(main_window, COLOR_PAIR(0));
-					waddstr(main_window, "!!!");
 					getyx(main_window, y, x);
-					print_center_text(main_window, y + 2, "Congratulations!");
+					char congrats[] = "Congratulations!";
+					len = strlen(congrats);
+					indent = (width - len) / 2; // calculate indent
+					wmove(main_window, y + 2, indent);
+					t = congrats; // initialize pointer
+					i = 0;
+					while(i < len)
+					{
+						waddch(main_window, *(t + i));
+						wrefresh(main_window);
+						napms(100); // .1 sec. delay
+						i++;
+					}
+					napms(500); // .5 sec. delay
 				}
 				else
 				{
